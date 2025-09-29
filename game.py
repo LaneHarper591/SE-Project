@@ -92,22 +92,22 @@ class Model():
 
 		# Add two additional players to database if not already in database
 		# Check if id is in database
-		sql_query = "SELECT * FROM players WHERE id = %s;"
-		self.cursor.execute(sql_query, (2,))
+		sql_query = "SELECT * FROM players WHERE id = 2;"
+		self.cursor.execute(sql_query)
 		rows = self.cursor.fetchall()
-		if (rows == 0):
+		if (rows != True):
 			# Enter id and code name into database
-			sql_query = "INSERT INTO players (id, codename) VALUES (%s, %s);"
-			self.cursor.execute(sql_query, 2, "Shark")
+			sql_query = "INSERT INTO players (id, codename) VALUES (2, Shark);"
+			self.cursor.execute(sql_query)
 			self.conn.commit()
 		# Check if id is in database
-		sql_query = "SELECT * FROM players WHERE id = %s;"
-		self.cursor.execute(sql_query, (3,))
+		sql_query = "SELECT * FROM players WHERE id = 3;"
+		self.cursor.execute(sql_query)
 		rows = self.cursor.fetchall()
 		# Enter id and code name into database
-		if (rows == 0):
-			sql_query = "INSERT INTO players (id, codename) VALUES (%s, %s);"
-			self.cursor.execute(sql_query, 3, "Lazer")
+		if (rows != True):
+			sql_query = "INSERT INTO players (id, codename) VALUES (3, Lazer);"
+			self.cursor.execute(sql_query)
 			self.conn.commit()
 
 		# If game is currently in progress
@@ -689,3 +689,4 @@ while c.keep_going:
 	sleep(sleep_time)
 m.conn.close()
 m.cursor.close()
+
