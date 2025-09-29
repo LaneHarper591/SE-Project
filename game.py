@@ -28,7 +28,7 @@ class Player():
 		self.id = id
 		self.code_name = code_name
 		self.equip_id = equip_id
-		self.udp_client
+		self.udp_client = PythonUdpClient(default_network,7500,False)
 		self.is_broadcasting = False
 	
 	def set_up_client(self):
@@ -212,6 +212,10 @@ class Model():
 	def clear_players(self):
 		i = 0
 		while (i < self.num_players_per_team):
+			if (self.red_players[i].is_broadcasting):
+				self.red_players[i].udp_client.close()
+			if (self.green_players[i].is_broadcasting):
+				self.green_players[i].udp_client.close()
 			self.red_players[i].id = ""
 			self.red_players[i].code_name = ""
 			self.green_players[i].id = ""
