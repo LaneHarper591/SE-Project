@@ -212,10 +212,10 @@ class Model():
 	def clear_players(self):
 		i = 0
 		while (i < self.num_players_per_team):
-			if (self.red_players[i].is_broadcasting):
-				self.red_players[i].udp_client.close()
-			if (self.green_players[i].is_broadcasting):
-				self.green_players[i].udp_client.close()
+			# if (self.red_players[i].is_broadcasting):
+			# 	self.red_players[i].udp_client.close()
+			# if (self.green_players[i].is_broadcasting):
+			# 	self.green_players[i].udp_client.close()
 			self.red_players[i].id = ""
 			self.red_players[i].code_name = ""
 			self.green_players[i].id = ""
@@ -654,3 +654,4 @@ while (i < m.num_players_per_team):
 	if (m.green_players[i].is_broadcasting):
 		m.green_players[i].udp_client.close()
 	i += 1
+
