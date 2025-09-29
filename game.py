@@ -646,7 +646,7 @@ m.cursor.close()
 i = 0
 while (i < m.num_players_per_team):
 	if (m.red_players[i].is_broadcasting):
-		m.red_players[i].udp_client.dest_ip = network
+		m.red_players[i].udp_client.close()
 	if (m.green_players[i].is_broadcasting):
-		m.green_players[i].udp_client.dest_ip = network
+		m.green_players[i].udp_client.close()
 	i += 1
