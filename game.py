@@ -90,32 +90,6 @@ class Model():
 		self.conn = psycopg2.connect(**connection_params)
 		self.cursor = self.conn.cursor()
 
-		# Add two additional players to database if not already in database
-		# Check if id is in database
-		sql_query = "SELECT * FROM players WHERE id = %s;"
-		self.cursor.execute(sql_query, (2,))
-		rows = self.cursor.fetchall()
-		print("Printing before inserting id = 2")
-		for row in rows:
-			print(row)
-		if (rows != True):
-			# Enter id and code name into database
-			sql_query = "INSERT INTO players (id, codename) VALUES (%s, %s);"
-			self.cursor.execute(sql_query, (2, "Shark"))
-			self.conn.commit()
-		# Check if id is in database
-		sql_query = "SELECT * FROM players WHERE id = %s;"
-		self.cursor.execute(sql_query, (3,))
-		rows = self.cursor.fetchall()
-		# Enter id and code name into database
-		print("Printing before inserting id = 3")
-		for row in rows:
-			print(row)
-		if (rows != True):
-			sql_query = "INSERT INTO players (id, codename) VALUES (%s, %s);"
-			self.cursor.execute(sql_query, (3, "Lazer"))
-			self.conn.commit()
-
 		# If game is currently in progress
 		self.game_active = False
 		# Game timer
