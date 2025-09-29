@@ -9,6 +9,8 @@ import psycopg2
 from pygame.locals import*
 from time import sleep
 from psycopg2 import sql
+from udp_handler import UdpHandler
+from python_udpclient import PythonUdpClient
 
 # Screen indices - used to switch view between screens
 splash_index = 0
@@ -26,6 +28,12 @@ class Player():
 		self.id = id
 		self.code_name = code_name
 		self.equip_id = equip_id
+		self.udp_client
+		self.is_broadcasting = False
+	
+	def set_up_client(self):
+		self.udp_client = PythonUdpClient(default_network,7500,True)
+		self.is_broadcasting = True
 
 # Used to display player information; receives coordinates, dimensions, and a string to display
 class Box():
@@ -107,6 +115,11 @@ class Model():
 		# Network IP
 		self.network = default_network
 
+		# UDP handler
+		self.udp_handler = UdpHandler()
+
+
+
 	def update(self):
 		# Update timer until 3 seconds have passed
 		if (self.splash_timer < (3 / sleep_time)):
@@ -115,6 +128,7 @@ class Model():
 			# Display player entry screen
 			if (self.game_active == False):
 				self.screen_index = player_screen_index
+				self.udp_handler.poll()
 			# Display game screen until game is over
 			if (self.game_active == True):
 				self.screen_index = game_screen_index
@@ -158,7 +172,6 @@ class Model():
 		if (rows):
 			self.temp_code_name = rows[0][1] 
 			self.need_code_name = False
-		# Display all players in database before insertion of new id
 		self.cursor.execute("SELECT * FROM players")
 		print("Current SQL contents (before insertion of current id):")
 		rows = self.cursor.fetchall()
@@ -169,7 +182,7 @@ class Model():
 
 	# Enter code name into database
 	def enter_code_name(self, code_name):
-		# Enter id and code name into database
+#		# Enter id and code name into database
 		sql_query = "INSERT INTO players (id, codename) VALUES (%s, %s);"
 		self.cursor.execute(sql_query,(self.temp_id, code_name))
 		self.conn.commit()
@@ -182,11 +195,17 @@ class Model():
 			self.red_players[self.num_red_players].id = self.temp_id
 			self.red_players[self.num_red_players].code_name = self.temp_code_name
 			self.red_players[self.num_red_players].equip_id = equip_id
+			# Begin player broadcast
+			self.red_players[self.num_red_players].set_up_client()
+			self.red_players[self.num_red_players].udp_client.send_int(equip_id)
 			self.num_red_players += 1
 		elif ((equip_id % 2 == 0) and (self.num_green_players <= self.num_players_per_team)): # Do not add a player if there are already 15
 			self.green_players[self.num_green_players].id = self.temp_id
 			self.green_players[self.num_green_players].code_name = self.temp_code_name
 			self.green_players[self.num_green_players].equip_id = equip_id
+			# Begin player broadcast
+			self.red_players[self.num_green_players].set_up_client()
+			self.red_players[self.num_green_players].udp_client.send_int(equip_id)
 			self.num_green_players += 1
 		# Broadcast player id
 	
@@ -211,6 +230,13 @@ class Model():
 #	# Change Network IP
 	def change_network(self, network):
 		self.network = network
+		i = 0
+		while (i < self.num_players_per_team):
+			if (self.red_players[i].is_broadcasting):
+				self.red_players[i].udp_client.dest_ip = network
+			if (self.green_players[i].is_broadcasting):
+				self.green_players[i].udp_client.dest_ip = network
+			i += 1
 
 class View():
 	def __init__(self, model):
@@ -602,60 +628,6 @@ class Controller():
 							self.view.equip_id_popup_box.input_feedback += pygame.key.name(event.key)
 			keys = pygame.key.get_pressed()
 
-# # Database code
-# import psycopg2
-# from psycopg2 import sql
-# # Define connection parameters
-# connection_params = {
-#     'dbname': 'photon',
-#     'user': 'student',
-#     #'password': 'student',
-#     #'host': 'localhost',
-#     #'port': '5432'
-# }
-
-# try:
-# 	# Connect to PostgreSQL
-#     conn = psycopg2.connect(**connection_params)
-#     cursor = conn.cursor()
-
-#     # Execute a query
-#     cursor.execute("SELECT version();")
-
-#     # Fetch and display the result
-#     version = cursor.fetchone()
-#     print(f"Connected to - {version}")
-
-#     # Insert two players
-#     cursor.execute('''
-#         INSERT INTO players (id, codename)
-#         VALUES (%s, %s);
-#     ''', ('1', 'Shark'))
-	
-# 	# cursor.execute('''
-# 	# 	INSERT INTO players (id, codename)
-# 	# 	VALUES (%s, %s);
-# 	# ''', ('2', 'Lazer'))
-
-#     # Commit the changes
-#     conn.commit()
-
-#     # Fetch and display data from the table
-#     cursor.execute("SELECT * FROM players;")
-#     rows = cursor.fetchall()
-#     for row in rows:
-#         print(row)
-
-# except Exception as error:
-#     print(f"Error connecting to PostgreSQL database: {error}")
-
-# finally:
-#     # Close the cursor and connection
-#     if cursor:
-#         cursor.close()
-#     if conn:
-#         conn.close()
-
 # Running the code code
 pygame.init()
 m = Model()
@@ -669,3 +641,5 @@ while c.keep_going:
 	sleep(sleep_time)
 m.conn.close()
 m.cursor.close()
+m.udp_handler.close()
+
