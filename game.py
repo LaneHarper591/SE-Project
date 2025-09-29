@@ -97,7 +97,7 @@ class Model():
 		rows = self.cursor.fetchall()
 		if (rows != True):
 			# Enter id and code name into database
-			sql_query = "INSERT INTO players (id, codename) VALUES (2, Shark);"
+			sql_query = "INSERT INTO players (id, codename) VALUES (2, "Shark");"
 			self.cursor.execute(sql_query)
 			self.conn.commit()
 		# Check if id is in database
@@ -106,7 +106,7 @@ class Model():
 		rows = self.cursor.fetchall()
 		# Enter id and code name into database
 		if (rows != True):
-			sql_query = "INSERT INTO players (id, codename) VALUES (3, Lazer);"
+			sql_query = "INSERT INTO players (id, codename) VALUES (3, "Lazer");"
 			self.cursor.execute(sql_query)
 			self.conn.commit()
 
@@ -689,4 +689,5 @@ while c.keep_going:
 	sleep(sleep_time)
 m.conn.close()
 m.cursor.close()
+
 
