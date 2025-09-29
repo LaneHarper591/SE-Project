@@ -116,7 +116,7 @@ class Model():
 		self.network = default_network
 
 		# UDP handler
-		self.udp_handler = UdpHandler()
+		# self.udp_handler = UdpHandler()
 
 
 
@@ -128,7 +128,7 @@ class Model():
 			# Display player entry screen
 			if (self.game_active == False):
 				self.screen_index = player_screen_index
-				self.udp_handler.poll()
+				# self.udp_handler.poll()
 			# Display game screen until game is over
 			if (self.game_active == True):
 				self.screen_index = game_screen_index
@@ -641,5 +641,12 @@ while c.keep_going:
 	sleep(sleep_time)
 m.conn.close()
 m.cursor.close()
-m.udp_handler.close()
-
+# m.udp_handler.close()
+# Close player broadcasts
+i = 0
+while (i < m.num_players_per_team):
+	if (m.red_players[i].is_broadcasting):
+		m.red_players[i].udp_client.dest_ip = network
+	if (m.green_players[i].is_broadcasting):
+		m.green_players[i].udp_client.dest_ip = network
+	i += 1
