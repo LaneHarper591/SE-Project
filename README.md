@@ -1,5 +1,5 @@
-# SoftwareEngineeringProjectTeam1
-Repository for Team 1 Software Engineering Project Code
+# Se-Project
+Repository for Software Engineering Project Code
 
 Team Members - 
   Lane Harper - LaneHarper591
