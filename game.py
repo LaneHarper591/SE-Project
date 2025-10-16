@@ -28,12 +28,6 @@ class Player():
 		self.id = id
 		self.code_name = code_name
 		self.equip_id = equip_id
-		self.udp_client = PythonUdpClient(default_network,7500,False)
-		self.is_broadcasting = False
-	
-	def set_up_client(self):
-		self.udp_client = PythonUdpClient(default_network,7500,True)
-		self.is_broadcasting = True
 
 # Used to display player information; receives coordinates, dimensions, and a string to display
 class Box():
@@ -112,13 +106,9 @@ class Model():
 			self.green_players.append(Player("", "", ""))
 			i += 1
 		
-		# Network IP
+		# Network IP + UDP TX
 		self.network = default_network
-
-		# UDP handler
-		# self.udp_handler = UdpHandler()
-
-
+		self.udp_tx = PythonUdpClient(dest_ip=self.network, dest_port=7500, enable_broadcast=True)
 
 	def update(self):
 		# Update timer until 3 seconds have passed
@@ -128,7 +118,6 @@ class Model():
 			# Display player entry screen
 			if (self.game_active == False):
 				self.screen_index = player_screen_index
-				# self.udp_handler.poll()
 			# Display game screen until game is over
 			if (self.game_active == True):
 				self.screen_index = game_screen_index
@@ -195,27 +184,27 @@ class Model():
 			self.red_players[self.num_red_players].id = self.temp_id
 			self.red_players[self.num_red_players].code_name = self.temp_code_name
 			self.red_players[self.num_red_players].equip_id = equip_id
-			# Begin player broadcast
-			self.red_players[self.num_red_players].set_up_client()
-			self.red_players[self.num_red_players].udp_client.send_int(equip_id)
-			self.num_red_players += 1
+			self.num_red_players += 1 
+			# Broadcast player id
+			try:
+				self.udp_tx.send_int(equip_id)
+			except Exception as e:
+				print(f"UDP send failed: {e}")
+		
 		elif ((equip_id % 2 == 0) and (self.num_green_players <= self.num_players_per_team)): # Do not add a player if there are already 15
 			self.green_players[self.num_green_players].id = self.temp_id
 			self.green_players[self.num_green_players].code_name = self.temp_code_name
 			self.green_players[self.num_green_players].equip_id = equip_id
-			# Begin player broadcast
-			self.red_players[self.num_green_players].set_up_client()
-			self.red_players[self.num_green_players].udp_client.send_int(equip_id)
 			self.num_green_players += 1
-		# Broadcast player id
-	
+			# Broadcast player id
+			try:
+				self.udp_tx.send_int(equip_id)
+			except Exception as e:
+				print(f"UDP send failed: {e}")
+				
 	def clear_players(self):
 		i = 0
 		while (i < self.num_players_per_team):
-			# if (self.red_players[i].is_broadcasting):
-			# 	self.red_players[i].udp_client.close()
-			# if (self.green_players[i].is_broadcasting):
-			# 	self.green_players[i].udp_client.close()
 			self.red_players[i].id = ""
 			self.red_players[i].code_name = ""
 			self.green_players[i].id = ""
@@ -234,13 +223,10 @@ class Model():
 #	# Change Network IP
 	def change_network(self, network):
 		self.network = network
-		i = 0
-		while (i < self.num_players_per_team):
-			if (self.red_players[i].is_broadcasting):
-				self.red_players[i].udp_client.dest_ip = network
-			if (self.green_players[i].is_broadcasting):
-				self.green_players[i].udp_client.dest_ip = network
-			i += 1
+		try:
+			self.udp_tx.set_destination(network, 7500)
+		except Exception as e:
+			print(f"Failed to set UDP destination: {e}")
 
 class View():
 	def __init__(self, model):
@@ -529,7 +515,11 @@ class Controller():
 				elif event.type == KEYDOWN:
 					if event.key == K_ESCAPE:
 						self.keep_going = False
+					elif (event.key == K_LSHIFT) or (event.key == K_RSHIFT):
+						self.shift = True
 				elif event.type == pygame.KEYUP: #self is keyReleased!
+					if (event.key == K_LSHIFT) or (event.key == K_RSHIFT):
+						self.shift = False
 					# Add player if key is F1 and if model needs a player id (prevents starting another player adding procedure) and network popup is not on screen
 					if (event.key == K_F1) and (self.model.need_id == True) and (self.view.network_popup_box.popup == False):
 						self.view.id_popup_box.popup = True
@@ -605,8 +595,17 @@ class Controller():
 								self.view.code_name_popup_box.input_feedback = ""
 								# Receive equipment id from user
 								self.view.equip_id_popup_box.popup = True
+						# Prevent key's name from being input into popup
+						elif (event.key == K_LSHIFT) or (event.key == K_RSHIFT):
+							{}
 						else:
-							self.view.code_name_popup_box.input_feedback += pygame.key.name(event.key)
+							# Input lowercase letters
+							if (self.shift == False):
+								self.view.code_name_popup_box.input_feedback += pygame.key.name(event.key)
+							# Input uppercase letters
+							else:
+								char = pygame.key.name(event.key)
+								self.view.code_name_popup_box.input_feedback += char.capitalize()
 					# Enter characters into equipment id popup
 					elif (self.view.equip_id_popup_box.popup):
 						if (event.key == K_BACKSPACE):
@@ -632,6 +631,60 @@ class Controller():
 							self.view.equip_id_popup_box.input_feedback += pygame.key.name(event.key)
 			keys = pygame.key.get_pressed()
 
+# # Database code
+# import psycopg2
+# from psycopg2 import sql
+# # Define connection parameters
+# connection_params = {
+#     'dbname': 'photon',
+#     'user': 'student',
+#     #'password': 'student',
+#     #'host': 'localhost',
+#     #'port': '5432'
+# }
+
+# try:
+# 	# Connect to PostgreSQL
+#     conn = psycopg2.connect(**connection_params)
+#     cursor = conn.cursor()
+
+#     # Execute a query
+#     cursor.execute("SELECT version();")
+
+#     # Fetch and display the result
+#     version = cursor.fetchone()
+#     print(f"Connected to - {version}")
+
+#     # Insert two players
+#     cursor.execute('''
+#         INSERT INTO players (id, codename)
+#         VALUES (%s, %s);
+#     ''', ('1', 'Shark'))
+	
+# 	# cursor.execute('''
+# 	# 	INSERT INTO players (id, codename)
+# 	# 	VALUES (%s, %s);
+# 	# ''', ('2', 'Lazer'))
+
+#     # Commit the changes
+#     conn.commit()
+
+#     # Fetch and display data from the table
+#     cursor.execute("SELECT * FROM players;")
+#     rows = cursor.fetchall()
+#     for row in rows:
+#         print(row)
+
+# except Exception as error:
+#     print(f"Error connecting to PostgreSQL database: {error}")
+
+# finally:
+#     # Close the cursor and connection
+#     if cursor:
+#         cursor.close()
+#     if conn:
+#         conn.close()
+
 # Running the code code
 pygame.init()
 m = Model()
@@ -645,13 +698,6 @@ while c.keep_going:
 	sleep(sleep_time)
 m.conn.close()
 m.cursor.close()
-# m.udp_handler.close()
-# Close player broadcasts
-i = 0
-while (i < m.num_players_per_team):
-	if (m.red_players[i].is_broadcasting):
-		m.red_players[i].udp_client.close()
-	if (m.green_players[i].is_broadcasting):
-		m.green_players[i].udp_client.close()
-	i += 1
+
+
 
