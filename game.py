@@ -16,6 +16,7 @@ from python_udpclient import PythonUdpClient
 splash_index = 0
 player_screen_index = 1
 game_screen_index = 2
+countdown_screen_index = 3
 
 # Sleep time - How long until next frame
 sleep_time = 0.04
@@ -28,6 +29,8 @@ class Player():
 		self.id = id
 		self.code_name = code_name
 		self.equip_id = equip_id
+		self.base = 0
+		self.score = 0
 
 # Used to display player information; receives coordinates, dimensions, and a string to display
 class Box():
@@ -88,6 +91,8 @@ class Model():
 			'dbname': 'photon',
   			'user': 'student',
 		}
+		# A List of strings for storing the events that have happened
+		self.event_list = ["1st event", "2nd event", "3rd event", "4th event"]
 
 		self.conn = psycopg2.connect(**connection_params)
 		self.cursor = self.conn.cursor()
@@ -97,7 +102,13 @@ class Model():
 		# Game timer
 		self.game_timer = 0
 		# Length of game (in seconds)
-		self.game_length = 10
+		self.game_length = 360
+
+		self.countdown_timer = 0
+
+		# Create Highest Scorer, for the player with the most points at any given time, updated when an event happens (ie, someone tags someone)
+		self.highest_scorer = -1
+
 
 		# Initialize Arrays
 		i = 0
@@ -120,13 +131,25 @@ class Model():
 				self.screen_index = player_screen_index
 			# Display game screen until game is over
 			if (self.game_active == True):
-				self.screen_index = game_screen_index
-				if (self.game_timer < (self.game_length / sleep_time)):
-					self.game_timer += 1
-				else:
-					self.game_active = False
-					# Clear players
-					self.clear_players()
+				# Change from player entry screen to countdown screen
+				if self.screen_index == player_screen_index:
+					self.screen_index = countdown_screen_index
+				# Display countdown screen until timer ends
+				elif self.screen_index == countdown_screen_index:
+					if (self.countdown_timer < (30 / sleep_time)):
+						self.countdown_timer += 1
+					else:
+						self.countdown_timer = 0
+				# Play game after countdown
+				elif self.screen_index == game_screen_index:
+					self.screen_index = game_screen_index
+					if (self.game_timer < (self.game_length / sleep_time)):
+						self.game_timer += 1
+					else:
+						self.game_timer = 0
+						self.game_active = False
+						# Clear players
+						self.clear_players()
 	
 	def display_red_players(self):
 		print("Displaying Red Team:")
@@ -266,6 +289,11 @@ class View():
 		self.splash_size = (self.screen_w, self.screen_h)
 		self.scaled_splash_image = pygame.transform.scale(self.splash_background, self.splash_size)
 
+		# Load Base Image
+		self.base = pygame.image.load("images/baseicon.jpg")
+		self.base_size = (18, 18)
+		self.scaled_base_image = pygame.transform.scale(self.base, self.base_size)
+
 		# Edit current game text
 		self.edit_title_font_size = 45
 		self.edit_title_font = pygame.font.Font(None, self.edit_title_font_size)  # Default font
@@ -275,7 +303,7 @@ class View():
 		self.block_w = 350
 		self.block_h = 550
 		# Distance between the two blocks
-		self.block_distance = 20
+		self.block_distance = 2
 		# Additional Distance between top of block and top of screen
 		self.top_block_offset = -30
 		# Box Coordinates
@@ -343,7 +371,8 @@ class View():
 			self.green_code_name_boxes.append(Box(self.code_name_box_x, self.box_y, self.code_name_box_w, self.box_h, str(self.model.green_players[i].code_name)))
 			self.box_y += self.box_distance + self.box_h
 			i += 1
-
+		
+		
 		# Create input information boxes
 		self.funct_font_size = 12
 		self.funct_font = pygame.font.Font(None, self.funct_font_size)  # Default font
@@ -447,17 +476,23 @@ class View():
 				# Display red ids
 				self.txt_surface = self.font.render(self.red_id_boxes[i].text, True, self.black)  # Render text
 				self.screen.blit(self.txt_surface, (self.red_id_boxes[i].x + 5, self.red_id_boxes[i].y + 5))  # Position text
+
 				# Display red code_names
 				self.txt_surface = self.font.render(self.red_code_name_boxes[i].text, True, self.black)  # Render text
 				self.screen.blit(self.txt_surface, (self.red_code_name_boxes[i].x + 5, self.red_code_name_boxes[i].y + 5))  # Position text
+
 				# Display green ids
 				self.txt_surface = self.font.render(self.green_id_boxes[i].text, True, self.black)  # Render text
 				self.screen.blit(self.txt_surface, (self.green_id_boxes[i].x + 5, self.green_id_boxes[i].y + 5))  # Position text
+	
 				# Display green code_names
 				self.txt_surface = self.font.render(self.green_code_name_boxes[i].text, True, self.black)  # Render text
 				self.screen.blit(self.txt_surface, (self.green_code_name_boxes[i].x + 5, self.green_code_name_boxes[i].y + 5))  # Position text
+
 				i += 1
+
 			# Draw popup box if needed
+
 			if (self.network_popup_box.popup):
 				pygame.draw.rect(self.screen, self.white, self.network_popup_box.text_box)
 				self.txt_surface = self.popup_font.render(self.network_popup_box.text, True, self.black)  # Render text
@@ -465,6 +500,7 @@ class View():
 				pygame.draw.rect(self.screen, self.black, self.network_popup_box.input_box, 1)
 				self.txt_surface = self.popup_font.render(self.network_popup_box.input_feedback, True, self.black)  # Render text
 				self.screen.blit(self.txt_surface, (self.popup_input_x + 10, self.popup_input_y + 10))  # Position text
+
 			# Draw id popup box
 			elif (self.id_popup_box.popup):
 				pygame.draw.rect(self.screen, self.white, self.id_popup_box.text_box)
@@ -473,6 +509,7 @@ class View():
 				pygame.draw.rect(self.screen, self.black, self.id_popup_box.input_box, 1)
 				self.txt_surface = self.popup_font.render(self.id_popup_box.input_feedback, True, self.black)  # Render text
 				self.screen.blit(self.txt_surface, (self.popup_input_x + 10, self.popup_input_y + 10))  # Position text
+
 			# Draw code name popup box if needed
 			elif (self.id_popup_box.popup == False) and (self.code_name_popup_box.popup):
 				pygame.draw.rect(self.screen, self.white, self.code_name_popup_box.text_box)
@@ -481,6 +518,7 @@ class View():
 				pygame.draw.rect(self.screen, self.black, self.code_name_popup_box.input_box, 1)
 				self.txt_surface = self.popup_font.render(self.code_name_popup_box.input_feedback, True, self.black)  # Render text
 				self.screen.blit(self.txt_surface, (self.popup_input_x + 10, self.popup_input_y + 10))  # Position text
+
 			# Draw equpiment id popup box
 			elif (self.id_popup_box.popup == False) and (self.code_name_popup_box.popup == False) and (self.equip_id_popup_box.popup):
 				pygame.draw.rect(self.screen, self.white, self.equip_id_popup_box.text_box)
@@ -489,10 +527,115 @@ class View():
 				pygame.draw.rect(self.screen, self.black, self.equip_id_popup_box.input_box, 1)
 				self.txt_surface = self.popup_font.render(self.equip_id_popup_box.input_feedback, True, self.black)  # Render text
 				self.screen.blit(self.txt_surface, (self.popup_input_x + 10, self.popup_input_y + 10))  # Position text
+
 		# Draw game screen
 		elif (self.model.screen_index == game_screen_index):
-#			
-			{}
+#			use x, y, w, h for Rect
+			# Make background box elements
+			pygame.draw.rect(self.screen, (0, 0, 100), pygame.Rect(25, 525, 950, 150))
+			pygame.draw.rect(self.screen, self.green, pygame.Rect(550, 25, 425, 475))
+			pygame.draw.rect(self.screen, self.red, pygame.Rect(25, 25, 425, 475))
+			pygame.draw.rect(self.screen, (50,50,50), pygame.Rect(470, 15, 60, 35))
+			pygame.draw.rect(self.screen, (255, 255, 255), pygame.Rect(50, 70, 375, 5))
+			pygame.draw.rect(self.screen, (255, 255, 255), pygame.Rect(575, 70, 375, 5))
+			
+			# Make and Display the countdown timer
+			timer_now = self.model.game_timer * sleep_time
+			countdown = self.model.game_length - timer_now
+			min = round(countdown // 60)
+			sec = round(countdown % 60)
+			if sec < 10 :
+				clock = str(min) + ":0" + str(sec)
+			else:
+				clock = str(min) + ":" + str(sec)
+			self.txt_surface = pygame.font.Font(None, 32).render(clock, True, self.white)
+			self.screen.blit(self.txt_surface, (480, 20))
+
+			# Print team names
+			self.txt_surface = pygame.font.Font(None, 40).render("RED TEAM" , True, self.white)
+			self.screen.blit(self.txt_surface, ( 150, 40))
+			self.txt_surface = pygame.font.Font(None, 40).render("GREEN TEAM" , True, self.white)
+			self.screen.blit(self.txt_surface, ( 650, 40))
+
+			red_score = 0
+			green_score = 0	
+			initial_y = 100
+			red_team_x = 25
+			green_team_x = 550
+
+			# Loop over red team members
+			i = 0
+			while i < self.model.num_red_players  :
+				if self.model.red_players[i].base == 1:
+					#display base icon
+					self.screen.blit(self.scaled_base_image, ( red_team_x + 40 , initial_y + 1 + i*20))
+				# Do not display name if it it a flash tick and the player is a highest scorer
+				if self.model.highest_scorer == self.model.red_players[i].equip_id and self.model.game_timer % 25 > 12 :
+					{}
+				else:
+					# prints name
+					self.txt_surface = pygame.font.Font(None, 20).render(self.model.red_players[i].code_name, True, (175, 0, 0))
+					self.screen.blit(self.txt_surface, (red_team_x + 100, initial_y + i*20))
+					# prints points
+					red_score = red_score + self.model.red_players[i].score
+					points = str(self.model.red_players[i].score).zfill(4)
+					self.txt_surface = pygame.font.Font(None, 20).render(points, True, (175, 0, 0))
+					self.screen.blit(self.txt_surface, (red_team_x + 370, initial_y + i*20))
+				i += 1
+
+			# Loop over green team members
+			i = 0
+			while i < self.model.num_green_players :
+				if self.model.green_players[i].base == 1:
+					#display base icon
+					self.screen.blit(self.scaled_base_image, ( green_team_x + 40 , initial_y + 1 + i*20))
+				# do not display highest scorer during flash frames
+				if self.model.highest_scorer == self.model.green_players[i].equip_id and self.model.game_timer % 25 > 12 :
+					{}
+				else:
+					# prints name
+					self.txt_surface = pygame.font.Font(None, 20).render(self.model.green_players[i].code_name, True, (0, 175, 0))
+					self.screen.blit(self.txt_surface, (green_team_x + 100, initial_y + i*20))
+					# prints points
+					green_score = green_score + self.model.green_players[i].score
+					points = str(self.model.green_players[i].score).zfill(4)
+					self.txt_surface = pygame.font.Font(None, 20).render(points, True, (0, 175, 0))
+					self.screen.blit(self.txt_surface, (green_team_x + 370, initial_y + i*20))
+				i += 1
+
+			# Display team total scores
+			if red_score > green_score and self.model.game_timer % 25 > 12:
+				#display only green scoreboard
+				self.txt_surface = pygame.font.Font(None, 40).render(str(green_score).zfill(4), True, (0, 150, 0))
+				self.screen.blit(self.txt_surface, ( 900, 40))
+			elif red_score < green_score and self.model.game_timer % 25 > 12:
+				#display only red scoreboard
+				self.txt_surface = pygame.font.Font(None, 40).render(str(red_score).zfill(4), True, (150, 0, 0))
+				self.screen.blit(self.txt_surface, ( 360, 40))
+				
+			else:
+				#display both
+				self.txt_surface = pygame.font.Font(None, 40).render(str(green_score).zfill(4), True, (0, 150, 0))
+				self.screen.blit(self.txt_surface, ( 885, 40))
+				self.txt_surface = pygame.font.Font(None, 40).render(str(red_score).zfill(4), True, (150, 0, 0))
+				self.screen.blit(self.txt_surface, ( 360, 40))
+
+			#Make event feed
+			i = 0
+			event_feed_start_y = 645
+
+			while i < 4:
+				self.txt_surface = pygame.font.Font(None, 25).render(self.model.event_list[i], True, (255, 255, 255))
+				self.screen.blit(self.txt_surface, ( 50, event_feed_start_y-i*25))
+				i+=1
+
+			self.txt_surface = pygame.font.Font(None, 40).render("ACTION FEED" , True, self.white)
+			self.screen.blit(self.txt_surface, ( 50, 535))
+			#code bellow makes text
+				#self.txt_surface = self.popup_font.render("text", True, self.green) 	defines properties
+				#self.screen.blit(self.txt_surface, (10, 10))    						sets position
+			#how to make font
+				#pygame.font.Font(None, self.font_size)
 		pygame.display.flip() # Puts images on screen
 
 class Controller():
@@ -500,7 +643,7 @@ class Controller():
 		self.model = model
 		self.view = view
 		self.keep_going = True
-		
+
 	def update(self):
 
 		if (self.model.screen_index == splash_index):
@@ -511,7 +654,6 @@ class Controller():
 					self.keep_going = False
 				# elif event.type == pygame.MOUSEBUTTONUP:
 					# position = pygame.mouse.get_pos()
-
 				elif event.type == KEYDOWN:
 					if event.key == K_ESCAPE:
 						self.keep_going = False
@@ -660,7 +802,7 @@ class Controller():
 #         INSERT INTO players (id, codename)
 #         VALUES (%s, %s);
 #     ''', ('1', 'Shark'))
-	
+
 # 	# cursor.execute('''
 # 	# 	INSERT INTO players (id, codename)
 # 	# 	VALUES (%s, %s);
@@ -698,6 +840,9 @@ while c.keep_going:
 	sleep(sleep_time)
 m.conn.close()
 m.cursor.close()
+
+
+
 
 
 
