@@ -647,9 +647,9 @@ class View():
 		elif (self.model.screen_index == countdown_screen_index):
 			self.txt_surface = self.countdown_font.render(self.countdown_info, True, self.white)  # Render text
 			self.screen.blit(self.txt_surface, (self.screen_w/2 - 250, self.screen_h/2 - 200))  # Position text
-			self.txt_surface = self.countdown_font.render(str(int(self.model.countdown_timer*sleep_time)), True, self.white)  # Render text
+			self.txt_surface = self.countdown_font.render(str( 30 - int(self.model.countdown_timer*sleep_time)), True, self.white)  # Render text
 			self.screen.blit(self.txt_surface, (self.screen_w/2, self.screen_h/2 - 50))  # Position text
-				
+
 		pygame.display.flip() # Puts images on screen
 
 class Controller():
