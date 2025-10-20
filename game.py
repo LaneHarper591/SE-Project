@@ -284,6 +284,11 @@ class View():
 		self.white = (255, 255, 255)
 		self.black = (0, 0, 0)
 
+		# Countdown information
+		self.countdown_font_size = 100
+		self.countdown_font = pygame.font.Font(None, self.countdown_font_size)
+		self.countdown_info = "Game starts in"
+
 		# Load Splash Image
 		self.splash_background = pygame.image.load("images/logo.jpg")
 		self.splash_location = (0,0)
@@ -638,10 +643,13 @@ class View():
 			#how to make font
 				#pygame.font.Font(None, self.font_size)
 		
-		elif (self.model.screen_index == game_screen_index):
-			self.txt_surface = self.edit_title_font.render(str(self.model.countdown_timer*sleep_time), True, self.white)  # Render text
-			self.screen.blit(self.txt_surface, (self.screen_w/2 - 100, 100))  # Position text
-		
+		# Draw countdown timer screen
+		elif (self.model.screen_index == countdown_screen_index):
+			self.txt_surface = self.countdown_font.render(self.countdown_info, True, self.white)  # Render text
+			self.screen.blit(self.txt_surface, (self.screen_w/2 - 250, self.screen_h/2 - 200))  # Position text
+			self.txt_surface = self.countdown_font.render(str(int(self.model.countdown_timer*sleep_time)), True, self.white)  # Render text
+			self.screen.blit(self.txt_surface, (self.screen_w/2, self.screen_h/2 - 50))  # Position text
+				
 		pygame.display.flip() # Puts images on screen
 
 class Controller():
@@ -778,60 +786,6 @@ class Controller():
 						else:
 							self.view.equip_id_popup_box.input_feedback += pygame.key.name(event.key)
 			keys = pygame.key.get_pressed()
-
-# # Database code
-# import psycopg2
-# from psycopg2 import sql
-# # Define connection parameters
-# connection_params = {
-#     'dbname': 'photon',
-#     'user': 'student',
-#     #'password': 'student',
-#     #'host': 'localhost',
-#     #'port': '5432'
-# }
-
-# try:
-# 	# Connect to PostgreSQL
-#     conn = psycopg2.connect(**connection_params)
-#     cursor = conn.cursor()
-
-#     # Execute a query
-#     cursor.execute("SELECT version();")
-
-#     # Fetch and display the result
-#     version = cursor.fetchone()
-#     print(f"Connected to - {version}")
-
-#     # Insert two players
-#     cursor.execute('''
-#         INSERT INTO players (id, codename)
-#         VALUES (%s, %s);
-#     ''', ('1', 'Shark'))
-
-# 	# cursor.execute('''
-# 	# 	INSERT INTO players (id, codename)
-# 	# 	VALUES (%s, %s);
-# 	# ''', ('2', 'Lazer'))
-
-#     # Commit the changes
-#     conn.commit()
-
-#     # Fetch and display data from the table
-#     cursor.execute("SELECT * FROM players;")
-#     rows = cursor.fetchall()
-#     for row in rows:
-#         print(row)
-
-# except Exception as error:
-#     print(f"Error connecting to PostgreSQL database: {error}")
-
-# finally:
-#     # Close the cursor and connection
-#     if cursor:
-#         cursor.close()
-#     if conn:
-#         conn.close()
 
 # Running the code code
 pygame.init()
