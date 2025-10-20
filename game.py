@@ -140,6 +140,7 @@ class Model():
 						self.countdown_timer += 1
 					else:
 						self.countdown_timer = 0
+						self.screen_index = game_screen_index
 				# Play game after countdown
 				elif self.screen_index == game_screen_index:
 					self.screen_index = game_screen_index
@@ -636,6 +637,11 @@ class View():
 				#self.screen.blit(self.txt_surface, (10, 10))    						sets position
 			#how to make font
 				#pygame.font.Font(None, self.font_size)
+		
+		elif (self.model.screen_index == game_screen_index):
+			self.txt_surface = self.edit_title_font.render(str(self.model.countdown_timer*sleep_time), True, self.white)  # Render text
+			self.screen.blit(self.txt_surface, (self.screen_w/2 - 100, 100))  # Position text
+		
 		pygame.display.flip() # Puts images on screen
 
 class Controller():
