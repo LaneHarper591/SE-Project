@@ -16,7 +16,9 @@ from python_udpclient import PythonUdpClient
 splash_index = 0
 player_screen_index = 1
 game_screen_index = 2
-countdown_screen_index = 3
+play_action_index = 3
+countdown_screen_index = 4
+
 
 # Sleep time - How long until next frame
 sleep_time = 0.04
@@ -65,6 +67,10 @@ class Funct_Box(Box):
 
 class Model():
 	def __init__(self):
+
+
+
+		
 		# Start game with splash screen
 		self.screen_index = splash_index
 		# Timer used to change from splash screen to player entry screen
@@ -103,8 +109,11 @@ class Model():
 		self.game_timer = 0
 		# Length of game (in seconds)
 		self.game_length = 360
+		#countdown (pregame)
+		self.countdown_active = False
+		self.countdown_timer = 0 
+		self.countdown_length = 30
 
-		self.countdown_timer = 0
 
 		# Create Highest Scorer, for the player with the most points at any given time, updated when an event happens (ie, someone tags someone)
 		self.highest_scorer = -1
@@ -126,31 +135,34 @@ class Model():
 		if (self.splash_timer < (3 / sleep_time)):
 			self.splash_timer += 1
 		else:
-			# Display player entry screen
-			if (self.game_active == False):
+   	 		# 1) Pre-game countdown
+			if self.countdown_active:
+				self.screen_index = countdown_screen_index
+				if (self.countdown_timer < (self.countdown_length / sleep_time)):
+					self.countdown_timer += 1
+				else:
+            		# countdown finished , switch to action
+					self.countdown_active = False
+					self.game_active = True
+					self.game_timer = 0
+					self.screen_index = game_screen_index  # go to the action screen (index 3)
+
+			# 2) Game action (timer-based)
+			elif self.game_active:
+				# show action screen while the game is running
+				self.screen_index = game_screen_index
+				if (self.game_timer < (self.game_length / sleep_time)):
+					self.game_timer += 1
+				else:
+					# game over -> reset
+					self.game_timer = 0
+					self.game_active = False
+					self.clear_players()
+					self.screen_index = player_screen_index
+
+			# 3) Idle: player entry
+			else:
 				self.screen_index = player_screen_index
-			# Display game screen until game is over
-			if (self.game_active == True):
-				# Change from player entry screen to countdown screen
-				if self.screen_index == player_screen_index:
-					self.screen_index = countdown_screen_index
-				# Display countdown screen until timer ends
-				elif self.screen_index == countdown_screen_index:
-					if (self.countdown_timer < (30 / sleep_time)):
-						self.countdown_timer += 1
-					else:
-						self.countdown_timer = 0
-						self.screen_index = game_screen_index
-				# Play game after countdown
-				elif self.screen_index == game_screen_index:
-					self.screen_index = game_screen_index
-					if (self.game_timer < (self.game_length / sleep_time)):
-						self.game_timer += 1
-					else:
-						self.game_timer = 0
-						self.game_active = False
-						# Clear players
-						self.clear_players()
 	
 	def display_red_players(self):
 		print("Displaying Red Team:")
@@ -238,11 +250,16 @@ class Model():
 		self.num_green_players = 0
 	
 	def start_game(self):
-		print("Starting game")
-		# Switch screen index to show game screen
-		self.game_active = True
+
+		print("Starting countdown...")
+		self.countdown_active = True
+		self.countdown_timer = 0
+		self.screen_index = countdown_screen_index
+
 		# Game code
-#
+
+
+
 	
 #	# Change Network IP
 	def change_network(self, network):
@@ -284,11 +301,6 @@ class View():
 		self.white = (255, 255, 255)
 		self.black = (0, 0, 0)
 
-		# Countdown information
-		self.countdown_font_size = 100
-		self.countdown_font = pygame.font.Font(None, self.countdown_font_size)
-		self.countdown_info = "Game starts in"
-
 		# Load Splash Image
 		self.splash_background = pygame.image.load("images/logo.jpg")
 		self.splash_location = (0,0)
@@ -304,6 +316,9 @@ class View():
 		self.edit_title_font_size = 45
 		self.edit_title_font = pygame.font.Font(None, self.edit_title_font_size)  # Default font
 		self.edit_title_text = "EDIT CURRENT GAME"
+		# Fonts for countdown & action screens
+		self.count_font = pygame.font.Font(None, 160)   
+		self.banner_font = pygame.font.Font(None, 64)   
 
 		# Red/Green Block Dimensions
 		self.block_w = 350
@@ -534,6 +549,17 @@ class View():
 				self.txt_surface = self.popup_font.render(self.equip_id_popup_box.input_feedback, True, self.black)  # Render text
 				self.screen.blit(self.txt_surface, (self.popup_input_x + 10, self.popup_input_y + 10))  # Position text
 
+		# Countdown screen
+		elif (self.model.screen_index == countdown_screen_index):
+    		# compute remaining from frames
+			elapsed = self.model.countdown_timer * sleep_time
+			remaining = max(0, int(round(self.model.countdown_length - elapsed)))
+			msg = str(remaining) if remaining > 0 else "GO!"
+			text_surf = self.count_font.render(msg, True, self.white)
+			rect = text_surf.get_rect(center=(self.screen_w//2, self.screen_h//2))
+			self.screen.blit(text_surf, rect)
+
+
 		# Draw game screen
 		elif (self.model.screen_index == game_screen_index):
 #			use x, y, w, h for Rect
@@ -642,14 +668,6 @@ class View():
 				#self.screen.blit(self.txt_surface, (10, 10))    						sets position
 			#how to make font
 				#pygame.font.Font(None, self.font_size)
-		
-		# Draw countdown timer screen
-		elif (self.model.screen_index == countdown_screen_index):
-			self.txt_surface = self.countdown_font.render(self.countdown_info, True, self.white)  # Render text
-			self.screen.blit(self.txt_surface, (self.screen_w/2 - 250, self.screen_h/2 - 200))  # Position text
-			self.txt_surface = self.countdown_font.render(str( 30 - int(self.model.countdown_timer*sleep_time)), True, self.white)  # Render text
-			self.screen.blit(self.txt_surface, (self.screen_w/2, self.screen_h/2 - 50))  # Position text
-
 		pygame.display.flip() # Puts images on screen
 
 class Controller():
@@ -787,6 +805,60 @@ class Controller():
 							self.view.equip_id_popup_box.input_feedback += pygame.key.name(event.key)
 			keys = pygame.key.get_pressed()
 
+# # Database code
+# import psycopg2
+# from psycopg2 import sql
+# # Define connection parameters
+# connection_params = {
+#     'dbname': 'photon',
+#     'user': 'student',
+#     #'password': 'student',
+#     #'host': 'localhost',
+#     #'port': '5432'
+# }
+
+# try:
+# 	# Connect to PostgreSQL
+#     conn = psycopg2.connect(**connection_params)
+#     cursor = conn.cursor()
+
+#     # Execute a query
+#     cursor.execute("SELECT version();")
+
+#     # Fetch and display the result
+#     version = cursor.fetchone()
+#     print(f"Connected to - {version}")
+
+#     # Insert two players
+#     cursor.execute('''
+#         INSERT INTO players (id, codename)
+#         VALUES (%s, %s);
+#     ''', ('1', 'Shark'))
+
+# 	# cursor.execute('''
+# 	# 	INSERT INTO players (id, codename)
+# 	# 	VALUES (%s, %s);
+# 	# ''', ('2', 'Lazer'))
+
+#     # Commit the changes
+#     conn.commit()
+
+#     # Fetch and display data from the table
+#     cursor.execute("SELECT * FROM players;")
+#     rows = cursor.fetchall()
+#     for row in rows:
+#         print(row)
+
+# except Exception as error:
+#     print(f"Error connecting to PostgreSQL database: {error}")
+
+# finally:
+#     # Close the cursor and connection
+#     if cursor:
+#         cursor.close()
+#     if conn:
+#         conn.close()
+
 # Running the code code
 pygame.init()
 m = Model()
@@ -800,6 +872,8 @@ while c.keep_going:
 	sleep(sleep_time)
 m.conn.close()
 m.cursor.close()
+
+
 
 
 
