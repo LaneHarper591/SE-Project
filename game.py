@@ -243,8 +243,10 @@ class Model():
 		while (i < self.num_players_per_team):
 			self.red_players[i].id = ""
 			self.red_players[i].code_name = ""
+			self.red_players[i].equip_id = ""
 			self.green_players[i].id = ""
 			self.green_players[i].code_name = ""
+			self.green_players[i].equip_id = ""
 			i += 1
 		self.num_red_players = 0
 		self.num_green_players = 0
@@ -803,9 +805,9 @@ class Controller():
 								duplicate = False
 								i = 0
 								while (i < self.model.num_players_per_team and duplicate == False):
-									if (int(self.view.id_popup_box.input_feedback) == self.model.red_players[i].equip_id):
+									if (int(self.view.equip_id_popup_box.input_feedback) == self.model.red_players[i].equip_id):
 										duplicate = True
-									elif (int(self.view.id_popup_box.input_feedback) == self.model.green_players[i].equip_id):
+									elif (int(self.view.equip_id_popup_box.input_feedback) == self.model.green_players[i].equip_id):
 										duplicate = True
 									i += 1
 								if (duplicate == False):
@@ -838,6 +840,7 @@ while c.keep_going:
 	sleep(sleep_time)
 m.conn.close()
 m.cursor.close()
+
 
 
 
