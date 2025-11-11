@@ -1,7 +1,7 @@
 # Name: Team 1
 # Description: Software Engineering Project
 # Date: Fall 2025
-
+import random
 import pygame
 import time
 import psycopg2
@@ -16,12 +16,11 @@ from python_udpclient import PythonUdpClient
 splash_index = 0
 player_screen_index = 1
 game_screen_index = 2
-play_action_index = 3
 countdown_screen_index = 4
 
 
-# Sleep time - How long until next frame
-sleep_time = 0.04
+# Sleep  - How long until next frame
+sleep_time = 0.34
 
 # Default Network IP Address
 default_network = "127.0.0.1"
@@ -84,6 +83,10 @@ class Model():
 		self.need_code_name = False
 		# self.need_equip_id = True
 
+		# UDP Listener
+		self.udpIn = UdpHandler()
+
+
 		# Temporary player creation variables
 		self.temp_id = -1
 		self.temp_code_name = ""
@@ -94,7 +97,7 @@ class Model():
   			'user': 'student',
 		}
 		# A List of strings for storing the events that have happened
-		self.event_list = ["1st event", "2nd event", "3rd event", "4th event"]
+		self.event_list = ["(6:00): Game Start", "", "", ""]
 
 		self.conn = psycopg2.connect(**connection_params)
 		self.cursor = self.conn.cursor()
@@ -109,11 +112,15 @@ class Model():
 		self.countdown_active = False
 		self.countdown_timer = 0 
 		self.countdown_length = 30
-
+		self.audio_started = False
+		self.audio_start_at = 14.8
+		track_num = random.randint(1,8)
+		self.audio_file = f"sounds/Track{track_num:02d}.mp3"
+		self.audio_volume = 0.8
 
 		# Create Highest Scorer, for the player with the most points at any given time, updated when an event happens (ie, someone tags someone)
 		self.highest_scorer = -1
-
+		self.highest_score = 0
 
 		# Initialize Arrays
 		i = 0
@@ -137,6 +144,16 @@ class Model():
    	 		# 1) Pre-game countdown
 			if self.countdown_active:
 				self.screen_index = countdown_screen_index
+				elapsed = self.countdown_timer * sleep_time
+				if(not self.audio_started) and (elapsed >= self.audio_start_at):
+					try:
+						pygame.mixer.music.load(self.audio_file)
+						pygame.mixer.music.set_volume(self.audio_volume)
+						pygame.mixer.music.play()
+						self.audio_started = True
+					except Exception as e:
+						print(f"Audio start failed: {e}")
+						
 				if (self.countdown_timer < (self.countdown_length / sleep_time)):
 					self.countdown_timer += 1
 				else:
@@ -150,10 +167,30 @@ class Model():
 			elif self.game_active:
 				# show action screen while the game is running
 				self.screen_index = game_screen_index
+				shot,shooter = self.udpIn.poll()
+				if (shot != None):
+					shotId = 0
+					shooterId = 0
+					if (len(shot) == 4):
+						if (shot[1] == ":"):
+							shotId = str(shot[2])+str(shot[3])
+							shooterId = str(shot[0])
+						else:
+							shotId = str(shot[3])
+							shooterId = str(shot[0])+str(shot[1])
+					elif (len(shot) == 5):
+						shotId = str(shot[3])+str(shot[4])
+						shooterId = str(shot[0])+str(shot[1])
+					else:
+						shotId = str(shot[2])
+						shooterId = str(shot[0])
+					self.ProcessUDP(shotId, shooterId)
 				if (self.game_timer < (self.game_length / sleep_time)):
 					self.game_timer += 1
 				else:
 					# game over -> reset
+					self.game_timer = 0
+					self.udp_tx.end_game()
 					print("Game Ending")
 					self.game_active = False
 					self.game_over = True
@@ -163,6 +200,118 @@ class Model():
 				self.screen_index = player_screen_index
 				
 	
+	def updateEvents(self, newEventString):
+		# should push all current events in self.eventList to the next position, overwriting the last one, then put newEventString in the first slot
+		self.event_list[3] = self.event_list[2]
+		self.event_list[2] = self.event_list[1]
+		self.event_list[1] = self.event_list[0]
+		timer_now = self.game_timer * sleep_time
+		countdown = self.game_length - timer_now
+		min = round(countdown // 60)
+		sec = round(countdown % 60)
+		if sec < 10 :
+			clock = str(min) + ":0" + str(sec)
+		else:
+			clock = str(min) + ":" + str(sec)
+		Event = "(" + clock + "): " + str(newEventString)
+		self.event_list[0] = Event
+
+
+	def ProcessUDP(self, shotIn, shooterIn):
+		shot = int(shotIn)
+		shooter = int(shooterIn)
+		shootername = self.getPlayerFromID(shooter)
+		if ((shot == 53) or (shot == 43)):
+			# person shot base, increment player's points by 100 and set base to true
+			self.givePoints(shooter, 100)
+			if (shooter % 2 == 1):
+				for player in self.red_players:
+					if (player.equip_id == shooter):
+						player.base = 1
+			else:
+				for player in self.green_players:
+					if (player.equip_id == shooter):
+						player.base = 1
+			Event = "" + str(shootername) + " has successfully captured the enemy base!" 
+			self.udp_tx.send_int(shot)
+			self.updateEvents(Event)
+			return None
+		# check for friendly fire
+		shotname = self.getPlayerFromID(shot)
+		if ((shot + shooter) % 2 == 1):
+			# person hit enemy team member, give them 10 points
+			self.givePoints(shooter, 10)
+			self.udp_tx.send_int(shot)
+			Event = "" + str(shootername) + " has shot "+str(shotname)+"!"
+			self.updateEvents(Event)
+		else:
+			# hit an ally, reduce both scores by 10
+			self.givePoints(shooter, -10)
+			self.udp_tx.send_int(shooter)
+			self.givePoints(shot, -10)
+			self.udp_tx.send_int(shot)
+			Event = "" + str(shootername) + " has betrayed "+str(shotname)+"!"
+			self.updateEvents(Event)
+			
+		
+	def givePoints(self, recipientId, ammount):
+		if (recipientId % 2 == 1):
+			for player in self.red_players:
+				if (player.equip_id == recipientId):
+					if (ammount < 0):
+						# if equip id = highest scorer, find new highest scorer
+						player.score += ammount
+						if (self.highest_scorer != -1 and self.highest_scorer != player.equip_id):
+							{}
+						else:
+							self.findHighScorer()
+					else:
+						#easy
+						player.score += ammount
+						if (player.score >= self.highest_score):
+							self.findHighScorer()
+		else:
+			for player in self.green_players:
+				if (player.equip_id == recipientId):
+					if (ammount < 0):
+						# if equip id = highest scorer, find new highest scorer
+						player.score += ammount
+						if (self.highest_scorer != -1 and self.highest_scorer != player.equip_id):
+							{}
+						else:
+							self.findHighScorer()
+					else:
+						#easy
+						player.score += ammount
+						if (player.score >= self.highest_score):
+							self.findHighScorer()
+		
+	def findHighScorer(self):
+		self.highest_score = 0
+		self.highest_scorer = -1
+		for player in self.green_players:
+			if (player.score > self.highest_score):
+				self.highest_score = player.score
+				self.highest_scorer = player.equip_id
+			elif (player.score == self.highest_score):
+				self.highest_scorer = -1
+		for player in self.red_players:
+			if (player.score > self.highest_score):
+				self.highest_score = player.score
+				self.highest_scorer = player.equip_id
+			elif (player.score == self.highest_score):
+				self.highest_scorer = -1
+
+	def getPlayerFromID (self, EquipId):
+		if (int(EquipId) % 2 == 1):
+			for player in self.red_players:
+				if (player.equip_id == EquipId):
+					return (player.code_name)
+		else:
+			for player in self.green_players:
+				if (player.equip_id == EquipId):
+					return (player.code_name)
+
 	def display_red_players(self):
 		print("Displaying Red Team:")
 		i = 0
@@ -200,9 +349,7 @@ class Model():
 		print("Current SQL contents (before insertion of current id):")
 		rows = self.cursor.fetchall()
 		for row in rows:
-			print(row)
-
-		
+			print(row)		
 
 	# Enter code name into database
 	def enter_code_name(self, code_name):
@@ -243,9 +390,13 @@ class Model():
 			self.red_players[i].id = ""
 			self.red_players[i].code_name = ""
 			self.red_players[i].equip_id = ""
+			self.red_players[i].base = 0
+			self.red_players[i].score = 0
 			self.green_players[i].id = ""
 			self.green_players[i].code_name = ""
 			self.green_players[i].equip_id = ""
+			self.green_players[i].base = 0
+			self.green_players[i].score = 0
 			i += 1
 		self.num_red_players = 0
 		self.num_green_players = 0
@@ -255,8 +406,11 @@ class Model():
 		print("Starting countdown...")
 		self.countdown_active = True
 		self.countdown_timer = 0
+		self.audio_started = False
 		self.screen_index = countdown_screen_index
-	
+		self.udp_tx.start_game()
+		# Game code
+
 	# Change Network IP
 	def change_network(self, network):
 		self.network = network
@@ -305,7 +459,7 @@ class View():
 
 		# Load Base Image
 		self.base = pygame.image.load("images/baseicon.jpg")
-		self.base_size = (18, 18)
+		self.base_size = (12, 12)
 		self.scaled_base_image = pygame.transform.scale(self.base, self.base_size)
 
 		# Edit current game text
@@ -432,7 +586,7 @@ class View():
 		# F11 - None
 		self.funct_keys_boxes.append(Funct_Box(self.funct_keys_boxes_x,self.funct_keys_boxes_y,self.funct_keys_boxes_w,self.funct_keys_boxes_h,"","",""))
 		self.funct_keys_boxes_x += self.funct_keys_boxes_w
-		# F12 - Clear Players
+		# F12 - Clear Player
 		self.funct_keys_boxes.append(Funct_Box(self.funct_keys_boxes_x,self.funct_keys_boxes_y,self.funct_keys_boxes_w,self.funct_keys_boxes_h,"F12","Clear","Players"))
 		self.funct_keys_boxes_x += self.funct_keys_boxes_w
 		
@@ -561,7 +715,6 @@ class View():
 
 		# Draw game screen
 		elif (self.model.screen_index == game_screen_index):
-#			use x, y, w, h for Rect
 			# Make background box elements
 			pygame.draw.rect(self.screen, (0, 0, 100), pygame.Rect(25, 525, 950, 150))
 			pygame.draw.rect(self.screen, self.green, pygame.Rect(550, 25, 425, 475))
@@ -602,7 +755,8 @@ class View():
 					self.screen.blit(self.scaled_base_image, ( red_team_x + 40 , initial_y + 1 + i*20))
 				# Do not display name if it it a flash tick and the player is a highest scorer
 				if self.model.highest_scorer == self.model.red_players[i].equip_id and self.model.game_timer % 25 > 12 :
-					{}
+					red_score = red_score + self.model.red_players[i].score
+					
 				else:
 					# prints name
 					self.txt_surface = pygame.font.Font(None, 20).render(self.model.red_players[i].code_name, True, (175, 0, 0))
@@ -622,7 +776,7 @@ class View():
 					self.screen.blit(self.scaled_base_image, ( green_team_x + 40 , initial_y + 1 + i*20))
 				# do not display highest scorer during flash frames
 				if self.model.highest_scorer == self.model.green_players[i].equip_id and self.model.game_timer % 25 > 12 :
-					{}
+					green_score = green_score + self.model.green_players[i].score
 				else:
 					# prints name
 					self.txt_surface = pygame.font.Font(None, 20).render(self.model.green_players[i].code_name, True, (0, 175, 0))
@@ -638,7 +792,7 @@ class View():
 			if red_score > green_score and self.model.game_timer % 25 > 12:
 				#display only green scoreboard
 				self.txt_surface = pygame.font.Font(None, 40).render(str(green_score).zfill(4), True, (0, 150, 0))
-				self.screen.blit(self.txt_surface, ( 900, 40))
+				self.screen.blit(self.txt_surface, ( 885, 40))
 			elif red_score < green_score and self.model.game_timer % 25 > 12:
 				#display only red scoreboard
 				self.txt_surface = pygame.font.Font(None, 40).render(str(red_score).zfill(4), True, (150, 0, 0))
@@ -662,11 +816,6 @@ class View():
 
 			self.txt_surface = pygame.font.Font(None, 40).render("ACTION FEED" , True, self.white)
 			self.screen.blit(self.txt_surface, ( 50, 535))
-			#code bellow makes text
-				#self.txt_surface = self.popup_font.render("text", True, self.green) 	defines properties
-				#self.screen.blit(self.txt_surface, (10, 10))    						sets position
-			#how to make font
-				#pygame.font.Font(None, self.font_size)
 			
 			# Display return button information at end of game
 			if (self.model.game_over == True):
@@ -679,8 +828,7 @@ class View():
 				self.screen.blit(self.txt_surface, (self.return_to_entry_box.text_box.x + 5, self.return_to_entry_box.text_box.y + 25))  # Position text
 				# Draw text3
 				self.txt_surface = self.block_title_font.render(self.return_to_entry_box.text3, True, self.white)  # Render text
-				self.screen.blit(self.txt_surface, (self.return_to_entry_box.text_box.x + 5, self.return_to_entry_box.text_box.y + 40))  # Position text
-			
+				self.screen.blit(self.txt_surface, (self.return_to_entry_box.text_box.x + 5, self.return_to_entry_box.text_box.y + 40))  # Position text			
 		pygame.display.flip() # Puts images on screen
 
 class Controller():
@@ -712,7 +860,6 @@ class Controller():
 					# Return to player entry screen after game if F2 is pressed
 					elif (event.key == K_F2) and (self.model.game_over == True):
 						print("Returning to Player Entry Screen")
-						self.model.clear_players()
 						self.game_timer = 0
 						self.model.game_over = False
 					# Start game if F5 is pressed
@@ -845,6 +992,7 @@ class Controller():
 
 # Running the code
 pygame.init()
+pygame.mixer.init()
 m = Model()
 v = View(m)
 c = Controller(m, v)
@@ -855,15 +1003,6 @@ while c.keep_going:
 
 	sleep(sleep_time)
 m.conn.close()
+
 m.cursor.close()
-
-
-
-
-
-
-
-
-
-
 
